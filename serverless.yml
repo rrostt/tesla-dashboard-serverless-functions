@@ -1,0 +1,114 @@
+service: serverless-data
+
+plugins:
+  - serverless-offline-scheduler
+  - serverless-offline
+
+custom:
+  queuename: "statequeue-${self:provider.stage}"
+  stateTablename: "tesla-state-${self:provider.stage}"
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  stage: dev
+  region: eu-west-1
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "sqs:SendMessage"
+        - "sqs:GetQueueUrl"
+        - "sqs:DeleteMessage"
+        - "sqs:ReceiveMessage"
+      Resource: "arn:aws:sqs:${self:provider.region}:*:${self:custom.queuename}"
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_STATE_TABLENAME}"
+
+  environment:
+    STATE_QUEUE_NAME: ${self:custom.queuename}
+    DYNAMODB_STATE_TABLENAME: ${self:custom.stateTablename}
+    GOOGLE_API_KEY: AIzaSyACkJieSxT40oIvADE5uAt5JSfbiSE-PV8
+
+functions:
+  update:
+    handler: lib/handler.update
+    events:
+      - schedule: rate(1 minute)
+  save:
+    handler: lib/handler.save
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - StateQueue
+              - Arn
+  getLast:
+    handler: lib/handler.getLast
+    events:
+      - http:
+          path: /latest
+          method: get
+          cors: true
+  locations:
+    handler: lib/handler.locations
+    events:
+      - http:
+          path: /locations
+          method: get
+          cors: true
+
+  eta:
+    handler: lib/handler.eta
+    events:
+      - http:
+          path: /eta
+          method: get
+          cors: true
+
+  vehicle:
+    handler: lib/handler.vehicle
+    events:
+      - http:
+          path: /vehicle/climateOn
+          method: get
+          cors: true
+      - http:
+          path: /vehicle/climateOff
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    StateQueue:
+      Type: "AWS::SQS::Queue"
+      Properties:
+        QueueName: ${self:custom.queuename}
+    StateData:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: vehicle
+            AttributeType: S
+          -
+            AttributeName: timestamp
+            AttributeType: N
+        KeySchema:
+          -
+            AttributeName: vehicle
+            KeyType: HASH
+          -
+            AttributeName: timestamp
+            KeyType: RANGE
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_STATE_TABLENAME}
