@@ -34,7 +34,7 @@ provider:
   environment:
     STATE_QUEUE_NAME: ${self:custom.queuename}
     DYNAMODB_STATE_TABLENAME: ${self:custom.stateTablename}
-    GOOGLE_API_KEY: AIzaSyACkJieSxT40oIvADE5uAt5JSfbiSE-PV8
+    GOOGLE_API_KEY: ${file(./config.${self:provider.stage}.json):google.apikey}
 
 functions:
   update:
