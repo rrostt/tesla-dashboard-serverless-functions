@@ -83,6 +83,10 @@ functions:
           path: /vehicle/climateOff
           method: get
           cors: true
+      - http:
+          path: /vehicle/climate
+          method: get
+          cors: true
 
 resources:
   Resources:
