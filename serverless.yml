@@ -7,6 +7,7 @@ plugins:
 custom:
   queuename: "statequeue-${self:provider.stage}"
   stateTablename: "tesla-state-${self:provider.stage}"
+  userTablename: "tesla-user-${self:provider.stage}"
 
 provider:
   name: aws
@@ -29,11 +30,14 @@ provider:
         - dynamodb:PutItem
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
-      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_STATE_TABLENAME}"
+      Resource: 
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_STATE_TABLENAME}"
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_USER_TABLENAME}"
 
   environment:
     STATE_QUEUE_NAME: ${self:custom.queuename}
     DYNAMODB_STATE_TABLENAME: ${self:custom.stateTablename}
+    DYNAMODB_USER_TABLENAME: ${self:custom.userTablename}
     GOOGLE_API_KEY: ${file(./config.${self:provider.stage}.json):google.apikey}
 
 functions:
@@ -87,6 +91,17 @@ functions:
           path: /vehicle/climate
           method: get
           cors: true
+  user:
+    handler: lib/handler.user
+    events:
+      - http:
+          path: /user
+          method: get
+          cors: true
+      - http:
+          path: /user/tesla-token
+          method: post
+          cors: true
 
 resources:
   Resources:
@@ -116,3 +131,19 @@ resources:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
         TableName: ${self:provider.environment.DYNAMODB_STATE_TABLENAME}
+    UserData:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: email
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: email
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_USER_TABLENAME}
